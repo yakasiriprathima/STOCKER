@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio - Stocker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>📈 Stocker</h2>
+                <p>Welcome, {{ session.username }}!</p>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a></li>
+                <li><a href="{{ url_for('trade') }}" class="nav-link">Trade</a></li>
+                <li><a href="{{ url_for('portfolio') }}" class="nav-link active">Portfolio</a></li>
+                <li><a href="{{ url_for('history') }}" class="nav-link">History</a></li>
+                <li><a href="{{ url_for('help') }}" class="nav-link">Help</a></li>
+                <li><a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a></li>
+            </ul>
+        </nav>
+        
+        <main class="main-content">
+            <div class="content-header">
+                <h1>My Portfolio</h1>
+                <div class="last-update">
+                    Last updated: <span id="lastUpdate">--:--:--</span>
+                </div>
+            </div>
+            
+            <div class="portfolio-container">
+                {% if portfolio %}
+                    <div class="portfolio-summary">
+                        <h2>Portfolio Summary</h2>
+                        <div class="summary-cards">
+                            <div class="summary-card">
+                                <h3>Total Holdings</h3>
+                                <p>{{ portfolio|length }}</p>
+                            </div>
+                            <div class="summary-card">
+                                <h3>Total Invested</h3>
+                                <p>${{ "%.2f"|format(total_invested) }}</p>
+                            </div>
+                            <div class="summary-card">
+                                <h3>Current Value</h3>
+                                <p id="totalValue">${{ "%.2f"|format(total_current) }}</p>
+                            </div>
+                            <div class="summary-card">
+                                <h3>Total Gain/Loss</h3>
+                                <p id="totalGainLoss">
+                                    {% if total_gain_loss >= 0 %}
+                                        <span class="positive">+${{ "%.2f"|format(total_gain_loss) }}</span>
+                                    {% else %}
+                                        <span class="negative">-${{ "%.2f"|format(total_gain_loss|abs) }}</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="portfolio-table">
+                        <h2>Holdings</h2>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Symbol</th>
+                                    <th>Company</th>
+                                    <th>Quantity</th>
+                                    <th>Avg Price</th>
+                                    <th>Current Price</th>
+                                    <th>Total Value</th>
+                                    <th>Gain/Loss</th>
+                                    <th>Date Added</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for holding in portfolio %}
+                                    <tr>
+                                        <td class="symbol">{{ holding.symbol }}</td>
+                                        <td>{{ holding.name }}</td>
+                                        <td>{{ holding.quantity }}</td>
+                                        <td>${{ "%.2f"|format(holding.avg_price) }}</td>
+                                        <td class="current-price" data-symbol="{{ holding.symbol }}">
+                                            ${{ "%.2f"|format(holding.current_price) }}
+                                        </td>
+                                        <td class="total-value">${{ "%.2f"|format(holding.total_value) }}</td>
+                                        <td class="gain-loss">
+                                            {% set gain_loss = holding.total_value - (holding.quantity * holding.avg_price) %}
+                                            {% if gain_loss >= 0 %}
+                                                <span class="positive">+${{ "%.2f"|format(gain_loss) }}</span>
+                                            {% else %}
+                                                <span class="negative">-${{ "%.2f"|format(gain_loss|abs) }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ holding.created_at[:10] }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="empty-portfolio">
+                        <h2>No Holdings</h2>
+                        <p>You don't have any stocks in your portfolio yet.</p>
+                        <a href="{{ url_for('trade') }}" class="btn btn-primary">Start Trading</a>
+                    </div>
+                {% endif %}
+            </div>
+        </main>
+    </div>
+    
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            updatePortfolioPrices();
+            setInterval(updatePortfolioPrices, 10000);
+        });
+        
+        function updatePortfolioPrices() {
+            fetch('/get_stock_prices')
+                .then(response => response.json())
+                .then(stocksData => {
+                    let totalValue = 0;
+                    let totalGainLoss = 0;
+                    
+                    document.querySelectorAll('.current-price').forEach(cell => {
+                        const symbol = cell.getAttribute('data-symbol');
+                        const currentPrice = stocksData[symbol].price;
+                        cell.textContent = `$${currentPrice.toFixed(2)}`;
+                        
+                        const row = cell.closest('tr');
+                        const quantity = parseInt(row.cells[2].textContent);
+                        const avgPrice = parseFloat(row.cells[3].textContent.replace('$', ''));
+                        const currentValue = quantity * currentPrice;
+                        const gainLoss = currentValue - (quantity * avgPrice);
+                        
+                        totalValue += currentValue;
+                        totalGainLoss += gainLoss;
+                        
+                        row.cells[5].textContent = `$${currentValue.toFixed(2)}`;
+                        if (gainLoss >= 0) {
+                            row.cells[6].innerHTML = `<span class="positive">+$${gainLoss.toFixed(2)}</span>`;
+                        } else {
+                            row.cells[6].innerHTML = `<span class="negative">-$${Math.abs(gainLoss).toFixed(2)}</span>`;
+                        }
+                    });
+                    
+                    const totalValueElement = document.getElementById('totalValue');
+                    const totalGainLossElement = document.getElementById('totalGainLoss');
+                    if (totalValueElement) {
+                        totalValueElement.textContent = `$${totalValue.toFixed(2)}`;
+                    }
+                    if (totalGainLossElement) {
+                        if (totalGainLoss >= 0) {
+                            totalGainLossElement.innerHTML = `<span class="positive">+$${totalGainLoss.toFixed(2)}</span>`;
+                        } else {
+                            totalGainLossElement.innerHTML = `<span class="negative">-$${Math.abs(totalGainLoss).toFixed(2)}</span>`;
+                        }
+                    }
+
+                    const lastUpdateElement = document.getElementById('lastUpdate');
+                    if (lastUpdateElement) {
+                        const now = new Date();
+                        lastUpdateElement.textContent = now.toLocaleTimeString();
+                    }
+                });
+        }
+    </script>
+</body>
+</html>

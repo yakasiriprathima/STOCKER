@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Stocker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>📈 Stocker</h2>
+                <p>Welcome, {{ session.username }}!</p>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="{{ url_for('dashboard') }}" class="nav-link active">Dashboard</a></li>
+                <li><a href="{{ url_for('trade') }}" class="nav-link">Trade</a></li>
+                <li><a href="{{ url_for('portfolio') }}" class="nav-link">Portfolio</a></li>
+                <li><a href="{{ url_for('history') }}" class="nav-link">History</a></li>
+                <li><a href="{{ url_for('help') }}" class="nav-link">Help</a></li>
+                <li><a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a></li>
+            </ul>
+        </nav>
+        
+        <main class="main-content">
+            <div class="content-header">
+                <h1>Market Dashboard</h1>
+                <div class="last-update">
+                    Last updated: <span id="lastUpdate">--:--:--</span>
+                </div>
+            </div>
+            
+            <div class="stocks-grid" id="stocksGrid">
+                <!-- Stock cards will be populated by JavaScript -->
+            </div>
+        </main>
+    </div>
+    
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStockPrices();
+            setInterval(loadStockPrices, 10000); // Update every 10 seconds
+        });
+    </script>
+</body>
+</html>

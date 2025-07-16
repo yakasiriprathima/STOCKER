@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trade - Stocker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>📈 Stocker</h2>
+                <p>Welcome, {{ session.username }}!</p>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a></li>
+                <li><a href="{{ url_for('trade') }}" class="nav-link active">Trade</a></li>
+                <li><a href="{{ url_for('portfolio') }}" class="nav-link">Portfolio</a></li>
+                <li><a href="{{ url_for('history') }}" class="nav-link">History</a></li>
+                <li><a href="{{ url_for('help') }}" class="nav-link">Help</a></li>
+                <li><a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a></li>
+            </ul>
+        </nav>
+        
+        <main class="main-content">
+            <div class="content-header">
+                <h1>Trade Stocks</h1>
+            </div>
+            
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <div class="alert alert-success">
+                        {% for message in messages %}
+                            <p>{{ message }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+            
+            <div class="trade-container">
+                <div class="trade-form-card">
+                    <h2>Place Order</h2>
+                    <form method="POST" action="{{ url_for('execute_trade') }}" class="trade-form">
+                        <div class="form-group">
+                            <label for="symbol">Stock Symbol</label>
+                            <select id="symbol" name="symbol" required onchange="updatePrice()">
+                                <option value="">Select a stock</option>
+                                <option value="AAPL">AAPL - Apple Inc.</option>
+                                <option value="GOOGL">GOOGL - Alphabet Inc.</option>
+                                <option value="MSFT">MSFT - Microsoft Corp.</option>
+                                <option value="AMZN">AMZN - Amazon.com Inc.</option>
+                                <option value="TSLA">TSLA - Tesla Inc.</option>
+                                <option value="META">META - Meta Platforms Inc.</option>
+                                <option value="NVDA">NVDA - NVIDIA Corp.</option>
+                                <option value="NFLX">NFLX - Netflix Inc.</option>
+                                <option value="ADBE">ADBE - Adobe Inc.</option>
+                                <option value="CRM">CRM - Salesforce Inc.</option>
+                                <option value="ORCL">ORCL - Oracle Corp.</option>
+                                <option value="IBM">IBM - IBM Corp.</option>
+                                <option value="INTC">INTC - Intel Corp.</option>
+                                <option value="AMD">AMD - Advanced Micro Devices</option>
+                                <option value="PYPL">PYPL - PayPal Holdings Inc.</option>
+                                <option value="UBER">UBER - Uber Technologies Inc.</option>
+                                <option value="SPOT">SPOT - Spotify Technology SA</option>
+                                <option value="ZOOM">ZOOM - Zoom Video Communications</option>
+                                <option value="TWTR">TWTR - Twitter Inc.</option>
+                                <option value="SNAP">SNAP - Snap Inc.</option>
+                                <option value="SQ">SQ - Block Inc.</option>
+                                <option value="SHOP">SHOP - Shopify Inc.</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="action">Action</label>
+                            <select id="action" name="action" required>
+                                <option value="Buy">Buy</option>
+                                <option value="Sell">Sell</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="quantity">Quantity</label>
+                            <input type="number" id="quantity" name="quantity" min="1" step="1" required oninput="calculateTotal()" placeholder="Enter quantity">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="price">Price per Share</label>
+                            <input type="number" id="price" name="price" step="0.01" readonly placeholder="Select a stock first">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="total">Total Amount</label>
+                            <input type="text" id="total" readonly class="total-display" placeholder="$0.00">
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary btn-full">Execute Trade</button>
+                    </form>
+                </div>
+                
+                <div class="market-data-card">
+                    <h2>Live Market Data</h2>
+                    <div class="stocks-mini-grid" id="stocksMiniGrid">
+                        <!-- Mini stock cards will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        let stocksData = {};
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStockPricesForTrade();
+            setInterval(loadStockPricesForTrade, 10000);
+        });
+        
+        function loadStockPricesForTrade() {
+            fetch('/get_stock_prices')
+                .then(response => response.json())
+                .then(data => {
+                    stocksData = data;
+                    updateMiniStockGrid();
+                });
+        }
+        
+        function updateMiniStockGrid() {
+            const grid = document.getElementById('stocksMiniGrid');
+            grid.innerHTML = '';
+            
+            for (const [symbol, data] of Object.entries(stocksData)) {
+                const card = document.createElement('div');
+                card.className = 'mini-stock-card';
+                card.innerHTML = `
+                    <div class="mini-stock-symbol">${symbol}</div>
+                    <div class="mini-stock-price">$${data.price.toFixed(2)}</div>
+                `;
+                grid.appendChild(card);
+            }
+        }
+        
+        function updatePrice() {
+            const symbol = document.getElementById('symbol').value;
+            const priceInput = document.getElementById('price');
+            
+            if (symbol && stocksData[symbol]) {
+                priceInput.value = stocksData[symbol].price.toFixed(2);
+                calculateTotal();
+            } else {
+                priceInput.value = '';
+                document.getElementById('total').value = '';
+            }
+        }
+        
+        function calculateTotal() {
+            const quantity = document.getElementById('quantity').value;
+            const price = document.getElementById('price').value;
+            const totalInput = document.getElementById('total');
+            
+            if (quantity && price) {
+                const total = (quantity * price).toFixed(2);
+                totalInput.value = `$${total}`;
+            } else {
+                totalInput.value = '';
+            }
+        }
+    </script>
+</body>
+</html>

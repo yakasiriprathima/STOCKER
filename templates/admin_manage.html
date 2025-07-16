@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Users - Admin - Stocker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>📈 Stocker Admin</h2>
+                <p>Welcome, {{ session.username }}!</p>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="{{ url_for('admin_dashboard') }}" class="nav-link">Dashboard</a></li>
+                <li><a href="{{ url_for('admin_portfolio') }}" class="nav-link">All Portfolios</a></li>
+                <li><a href="{{ url_for('admin_history') }}" class="nav-link">All Trades</a></li>
+                <li><a href="{{ url_for('admin_manage') }}" class="nav-link active">Manage Users</a></li>
+                <li><a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a></li>
+            </ul>
+        </nav>
+        
+        <main class="main-content">
+            <div class="content-header">
+                <h1>User Management</h1>
+            </div>
+            
+            <div class="manage-container">
+                <div class="manage-section">
+                    <h2>Registered Users</h2>
+                    {% if users %}
+                        <div class="users-table">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Email</th>
+                                        <th>Role</th>
+                                        <th>Joined</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for user in users %}
+                                        <tr>
+                                            <td class="username">{{ user[1] }}</td>
+                                            <td>{{ user[2] }}</td>
+                                            <td>
+                                                <span class="role-badge">{{ user[4] }}</span>
+                                            </td>
+                                            <td>{{ user[5][:10] }}</td>
+                                            <td>
+                                                <span class="status-badge active">Active</span>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="empty-users">
+                            <p>No users registered yet.</p>
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="manage-section">
+                    <h2>User Messages</h2>
+                    {% if messages %}
+                        <div class="messages-list">
+                            {% for message in messages %}
+                                <div class="message-card">
+                                    <div class="message-header">
+                                        <span class="message-user">{{ message[2] }}</span>
+                                        <span class="message-date">{{ message[1][:19] }}</span>
+                                    </div>
+                                    <div class="message-content">
+                                        {{ message[0] }}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-messages">
+                            <p>No messages from users yet.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

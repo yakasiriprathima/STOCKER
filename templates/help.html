@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help - Stocker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>📈 Stocker</h2>
+                <p>Welcome, {{ session.username }}!</p>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a></li>
+                <li><a href="{{ url_for('trade') }}" class="nav-link">Trade</a></li>
+                <li><a href="{{ url_for('portfolio') }}" class="nav-link">Portfolio</a></li>
+                <li><a href="{{ url_for('history') }}" class="nav-link">History</a></li>
+                <li><a href="{{ url_for('help') }}" class="nav-link active">Help</a></li>
+                <li><a href="{{ url_for('logout') }}" class="nav-link logout">Logout</a></li>
+            </ul>
+        </nav>
+        
+        <main class="main-content">
+            <div class="content-header">
+                <h1>Help Center</h1>
+            </div>
+            
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <div class="alert alert-success">
+                        {% for message in messages %}
+                            <p>{{ message }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+            
+            <div class="help-container">
+                <div class="faq-section">
+                    <h2>Frequently Asked Questions</h2>
+                    
+                    <div class="faq-item">
+                        <h3>How do I buy stocks?</h3>
+                        <p>To buy stocks, go to the Trade page, select the stock symbol, choose "Buy" as the action, enter the quantity you want to purchase, and click "Execute Trade". The system will automatically calculate the total cost based on the current market price.</p>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <h3>How do I sell stocks?</h3>
+                        <p>To sell stocks, go to the Trade page, select the stock symbol you own, choose "Sell" as the action, enter the quantity you want to sell, and click "Execute Trade". You can only sell stocks that you currently own in your portfolio.</p>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <h3>How often are stock prices updated?</h3>
+                        <p>Stock prices are updated every 10 seconds to provide you with near real-time market data. You can see the last update time on the dashboard.</p>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <h3>Can I view my trading history?</h3>
+                        <p>Yes! Go to the History page to view all your past trades, including buy and sell transactions, quantities, prices, and timestamps.</p>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <h3>How do I track my portfolio performance?</h3>
+                        <p>Visit the Portfolio page to see all your current holdings, their current values, and your gain/loss for each position. The page also shows your total portfolio value and overall performance.</p>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <h3>Is there a minimum or maximum trade amount?</h3>
+                        <p>Currently, there are no balance restrictions. You can buy or sell any quantity of stocks. The system is designed for demonstration purposes.</p>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <h3>How do I contact support?</h3>
+                        <p>You can send us a message using the contact form below. Our admin team will review your message and respond as soon as possible.</p>
+                    </div>
+                </div>
+                
+                <div class="contact-section">
+                    <h2>Contact Support</h2>
+                    <p>Have a question or need help? Send us a message and our team will get back to you.</p>
+                    
+                    <form method="POST" class="contact-form">
+                        <div class="form-group">
+                            <label for="message">Your Message</label>
+                            <textarea id="message" name="message" rows="6" placeholder="Describe your issue or question in detail..." required></textarea>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">Send Message</button>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

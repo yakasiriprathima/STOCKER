@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stocker - Stock Trading Platform</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <span class="logo-text">📈 Stocker</span>
+            </div>
+            <nav class="nav">
+                <button class="nav-btn active" onclick="showSection('home')">Home</button>
+                <button class="nav-btn" onclick="showSection('about')">About</button>
+                <button class="nav-btn" onclick="showSection('services')">Services</button>
+            </nav>
+            <div class="auth-buttons">
+                <a href="{{ url_for('login') }}" class="btn btn-outline">Login</a>
+                <a href="{{ url_for('signup') }}" class="btn btn-primary">Sign Up</a>
+            </div>
+        </header>
+
+        <main class="main">
+            <section id="home" class="section active">
+                <div class="hero">
+                    <h1>Welcome to Stocker</h1>
+                    <p>Your premier destination for stock trading and portfolio management.</p>
+                    <div class="hero-buttons">
+                        <a href="{{ url_for('signup') }}" class="btn btn-primary btn-large">Get Started</a>
+                        <a href="{{ url_for('login') }}" class="btn btn-outline btn-large">Login</a>
+                    </div>
+                </div>
+                
+                <div class="features">
+                    <div class="feature-card">
+                        <h3>Real-time Trading</h3>
+                        <p>Trade stocks with real-time price updates and instant execution.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Portfolio Management</h3>
+                        <p>Track your investments and monitor your portfolio performance.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>Admin Dashboard</h3>
+                        <p>Comprehensive admin tools for managing users and monitoring trades.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="about" class="section">
+                <div class="content">
+                    <h2>About Stocker</h2>
+                    <p>Stocker is a comprehensive stock trading platform designed for both individual traders and administrators. Our platform provides real-time stock prices, seamless trading capabilities, and powerful portfolio management tools.</p>
+                    
+                    <div class="about-features">
+                        <div class="about-item">
+                            <h4>For Traders</h4>
+                            <ul>
+                                <li>Real-time stock price monitoring</li>
+                                <li>Buy and sell stocks instantly</li>
+                                <li>Portfolio tracking and analysis</li>
+                                <li>Complete trading history</li>
+                                <li>24/7 customer support</li>
+                            </ul>
+                        </div>
+                        <div class="about-item">
+                            <h4>For Administrators</h4>
+                            <ul>
+                                <li>User management dashboard</li>
+                                <li>Trade monitoring and analytics</li>
+                                <li>Portfolio oversight</li>
+                                <li>Message center for user support</li>
+                                <li>Comprehensive reporting tools</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="services" class="section">
+                <div class="content">
+                    <h2>Our Services</h2>
+                    <div class="services-grid">
+                        <div class="service-card">
+                            <h3>Stock Trading</h3>
+                            <p>Buy and sell stocks with our intuitive trading interface. Real-time price updates ensure you never miss an opportunity.</p>
+                        </div>
+                        <div class="service-card">
+                            <h3>Portfolio Management</h3>
+                            <p>Keep track of your investments with detailed portfolio analytics, performance metrics, and historical data.</p>
+                        </div>
+                        <div class="service-card">
+                            <h3>Market Analysis</h3>
+                            <p>Access comprehensive market data and analysis tools to make informed trading decisions.</p>
+                        </div>
+                        <div class="service-card">
+                            <h3>Customer Support</h3>
+                            <p>Our dedicated support team is available to help you with any questions or issues you may have.</p>
+                        </div>
+                        <div class="service-card">
+                            <h3>Admin Tools</h3>
+                            <p>Powerful administrative features for managing users, monitoring trades, and overseeing platform operations.</p>
+                        </div>
+                        <div class="service-card">
+                            <h3>Security</h3>
+                            <p>Your data and transactions are protected with industry-leading security measures and encryption.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
