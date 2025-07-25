@@ -1,163 +1,174 @@
 import boto3
 import hashlib
+import secrets
 import smtplib
+import json
+import time
+import random
+import os
+from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
-import random
-import datetime
 import webbrowser
 import threading
-import time
 from decimal import Decimal
 import uuid
 
-app = Flask(__name__)
-app.secret_key = 'stocker_secret_key_2024'
+app = Flask(_name_)
+app.secret_key = secrets.token_hex(16)
 
-# AWS Configuration (hardcoded for demo)
-AWS_ACCESS_KEY_ID = 'your-access-key-id'
-AWS_SECRET_ACCESS_KEY = 'your-secret-access-key'
-AWS_REGION = 'us-east-1'
-SNS_TOPIC_ARN = 'arn:aws:sns:us-east-1:123456789012:stocker-notifications'
+# Global variable to track if browser was already opened
+browser_opened = False
 
-# Email configuration (hardcoded for demo)
-SMTP_SERVER = 'smtp.gmail.com'
-SMTP_PORT = 587
-EMAIL_USER = 'your-email@gmail.com'
-EMAIL_PASS = 'your-app-password'
+# AWS Configuration - Use environment variables with fallbacks
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+SNS_TOPIC_ARN = os.environ.get('SNS_TOPIC_ARN', 'arn:aws:sns:us-east-1:123456789012:stocker-alerts')
+DYNAMODB_TABLE_PREFIX = os.environ.get('DYNAMODB_TABLE_PREFIX', 'stocker_')
 
-# Initialize AWS services
-dynamodb = boto3.resource('dynamodb', 
-                         aws_access_key_id=AWS_ACCESS_KEY_ID,
-                         aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                         region_name=AWS_REGION)
+# Email Configuration
+SMTP_SERVER = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', 587))
+EMAIL_USER = os.environ.get('EMAIL_USER', 'stocker.demo@gmail.com')
+EMAIL_PASS = os.environ.get('EMAIL_PASS', 'demo_password_123')
 
-sns = boto3.client('sns',
-                   aws_access_key_id=AWS_ACCESS_KEY_ID,
-                   aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                   region_name=AWS_REGION)
+# Initialize AWS clients
+try:
+    dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+    sns = boto3.client('sns', region_name=AWS_REGION)
+    print("AWS services initialized successfully")
+except Exception as e:
+    print(f"AWS initialization failed: {e}")
+    # Fallback to local simulation
+    dynamodb = None
+    sns = None
 
-# Stock data
-STOCKS = {
-    'AAPL': {'name': 'Apple Inc.', 'price': 150.00},
-    'GOOGL': {'name': 'Alphabet Inc.', 'price': 2500.00},
-    'MSFT': {'name': 'Microsoft Corp.', 'price': 300.00},
-    'AMZN': {'name': 'Amazon.com Inc.', 'price': 3200.00},
-    'TSLA': {'name': 'Tesla Inc.', 'price': 800.00},
-    'META': {'name': 'Meta Platforms Inc.', 'price': 320.00},
-    'NVDA': {'name': 'NVIDIA Corp.', 'price': 450.00},
-    'NFLX': {'name': 'Netflix Inc.', 'price': 400.00},
-    'ADBE': {'name': 'Adobe Inc.', 'price': 500.00},
-    'CRM': {'name': 'Salesforce Inc.', 'price': 200.00},
-    'ORCL': {'name': 'Oracle Corp.', 'price': 80.00},
-    'IBM': {'name': 'IBM Corp.', 'price': 130.00},
-    'INTC': {'name': 'Intel Corp.', 'price': 50.00},
-    'AMD': {'name': 'Advanced Micro Devices', 'price': 90.00},
-    'PYPL': {'name': 'PayPal Holdings Inc.', 'price': 70.00},
-    'UBER': {'name': 'Uber Technologies Inc.', 'price': 40.00},
-    'SPOT': {'name': 'Spotify Technology SA', 'price': 120.00},
-    'ZOOM': {'name': 'Zoom Video Communications', 'price': 80.00},
-    'TWTR': {'name': 'Twitter Inc.', 'price': 45.00},
-    'SNAP': {'name': 'Snap Inc.', 'price': 25.00},
-    'SQ': {'name': 'Block Inc.', 'price': 60.00},
-    'SHOP': {'name': 'Shopify Inc.', 'price': 400.00}
+# Stock data simulation
+STOCK_DATA = {
+    'AAPL': {'name': 'Apple Inc.', 'base_price': 150.00},
+    'GOOGL': {'name': 'Alphabet Inc.', 'base_price': 2500.00},
+    'MSFT': {'name': 'Microsoft Corporation', 'base_price': 300.00},
+    'AMZN': {'name': 'Amazon.com Inc.', 'base_price': 3200.00},
+    'TSLA': {'name': 'Tesla Inc.', 'base_price': 800.00},
+    'META': {'name': 'Meta Platforms Inc.', 'base_price': 320.00},
+    'NVDA': {'name': 'NVIDIA Corporation', 'base_price': 900.00},
+    'NFLX': {'name': 'Netflix Inc.', 'base_price': 500.00},
+    'BABA': {'name': 'Alibaba Group', 'base_price': 100.00},
+    'JPM': {'name': 'JPMorgan Chase', 'base_price': 140.00},
+    'JNJ': {'name': 'Johnson & Johnson', 'base_price': 170.00},
+    'V': {'name': 'Visa Inc.', 'base_price': 220.00},
+    'WMT': {'name': 'Walmart Inc.', 'base_price': 145.00},
+    'PG': {'name': 'Procter & Gamble', 'base_price': 155.00},
+    'HD': {'name': 'Home Depot Inc.', 'base_price': 330.00},
+    'MA': {'name': 'Mastercard Inc.', 'base_price': 350.00},
+    'BAC': {'name': 'Bank of America', 'base_price': 40.00},
+    'DIS': {'name': 'Walt Disney Company', 'base_price': 110.00},
+    'ADBE': {'name': 'Adobe Inc.', 'base_price': 550.00},
+    'CRM': {'name': 'Salesforce Inc.', 'base_price': 210.00},
+    'ORCL': {'name': 'Oracle Corporation', 'base_price': 85.00}
 }
 
+def get_current_stock_prices():
+    """Get current stock prices with simulated fluctuation"""
+    prices = {}
+    for symbol, data in STOCK_DATA.items():
+        # Simulate price fluctuation
+        base_price = data['base_price']
+        fluctuation = random.uniform(-0.05, 0.05)  # +/- 5% fluctuation
+        current_price = base_price * (1 + fluctuation)
+        prices[symbol] = {
+            'name': data['name'],
+            'price': round(current_price, 2),
+            'change': round(fluctuation * 100, 2)
+        }
+    return prices
+
 def init_dynamodb():
+    """Initialize DynamoDB tables"""
+    if not dynamodb:
+        print("DynamoDB not available, using simulation mode")
+        return
+    
     try:
-        # Create Users table
-        users_table = dynamodb.create_table(
-            TableName='stocker_users',
-            KeySchema=[
-                {'AttributeName': 'user_id', 'KeyType': 'HASH'}
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'user_id', 'AttributeType': 'S'},
-                {'AttributeName': 'username', 'AttributeType': 'S'}
-            ],
-            GlobalSecondaryIndexes=[
-                {
-                    'IndexName': 'username-index',
-                    'KeySchema': [
-                        {'AttributeName': 'username', 'KeyType': 'HASH'}
-                    ],
-                    'Projection': {'ProjectionType': 'ALL'},
-                    'BillingMode': 'PAY_PER_REQUEST'
-                }
-            ],
-            BillingMode='PAY_PER_REQUEST'
-        )
+        # Users table
+        try:
+            users_table = dynamodb.create_table(
+                TableName=f'{DYNAMODB_TABLE_PREFIX}users',
+                KeySchema=[
+                    {'AttributeName': 'username', 'KeyType': 'HASH'}
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'username', 'AttributeType': 'S'}
+                ],
+                BillingMode='PAY_PER_REQUEST'
+            )
+            print("Users table created")
+        except dynamodb.meta.client.exceptions.ResourceInUseException:
+            print("Users table already exists")
         
-        # Create Portfolio table
-        portfolio_table = dynamodb.create_table(
-            TableName='stocker_portfolio',
-            KeySchema=[
-                {'AttributeName': 'user_id', 'KeyType': 'HASH'},
-                {'AttributeName': 'symbol', 'KeyType': 'RANGE'}
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'user_id', 'AttributeType': 'S'},
-                {'AttributeName': 'symbol', 'AttributeType': 'S'}
-            ],
-            BillingMode='PAY_PER_REQUEST'
-        )
+        # Portfolio table
+        try:
+            portfolio_table = dynamodb.create_table(
+                TableName=f'{DYNAMODB_TABLE_PREFIX}portfolio',
+                KeySchema=[
+                    {'AttributeName': 'user_id', 'KeyType': 'HASH'},
+                    {'AttributeName': 'stock_symbol', 'KeyType': 'RANGE'}
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'user_id', 'AttributeType': 'S'},
+                    {'AttributeName': 'stock_symbol', 'AttributeType': 'S'}
+                ],
+                BillingMode='PAY_PER_REQUEST'
+            )
+            print("Portfolio table created")
+        except dynamodb.meta.client.exceptions.ResourceInUseException:
+            print("Portfolio table already exists")
         
-        # Create Trades table
-        trades_table = dynamodb.create_table(
-            TableName='stocker_trades',
-            KeySchema=[
-                {'AttributeName': 'trade_id', 'KeyType': 'HASH'}
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'trade_id', 'AttributeType': 'S'},
-                {'AttributeName': 'user_id', 'AttributeType': 'S'}
-            ],
-            GlobalSecondaryIndexes=[
-                {
-                    'IndexName': 'user-id-index',
-                    'KeySchema': [
-                        {'AttributeName': 'user_id', 'KeyType': 'HASH'}
-                    ],
-                    'Projection': {'ProjectionType': 'ALL'},
-                    'BillingMode': 'PAY_PER_REQUEST'
-                }
-            ],
-            BillingMode='PAY_PER_REQUEST'
-        )
+        # Trade history table
+        try:
+            trade_history_table = dynamodb.create_table(
+                TableName=f'{DYNAMODB_TABLE_PREFIX}trade_history',
+                KeySchema=[
+                    {'AttributeName': 'user_id', 'KeyType': 'HASH'},
+                    {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'user_id', 'AttributeType': 'S'},
+                    {'AttributeName': 'timestamp', 'AttributeType': 'S'}
+                ],
+                BillingMode='PAY_PER_REQUEST'
+            )
+            print("Trade history table created")
+        except dynamodb.meta.client.exceptions.ResourceInUseException:
+            print("Trade history table already exists")
         
-        # Create Messages table
-        messages_table = dynamodb.create_table(
-            TableName='stocker_messages',
-            KeySchema=[
-                {'AttributeName': 'message_id', 'KeyType': 'HASH'}
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'message_id', 'AttributeType': 'S'},
-                {'AttributeName': 'user_id', 'AttributeType': 'S'}
-            ],
-            GlobalSecondaryIndexes=[
-                {
-                    'IndexName': 'user-id-index',
-                    'KeySchema': [
-                        {'AttributeName': 'user_id', 'KeyType': 'HASH'}
-                    ],
-                    'Projection': {'ProjectionType': 'ALL'},
-                    'BillingMode': 'PAY_PER_REQUEST'
-                }
-            ],
-            BillingMode='PAY_PER_REQUEST'
-        )
+        # Help messages table
+        try:
+            help_messages_table = dynamodb.create_table(
+                TableName=f'{DYNAMODB_TABLE_PREFIX}help_messages',
+                KeySchema=[
+                    {'AttributeName': 'message_id', 'KeyType': 'HASH'}
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'message_id', 'AttributeType': 'S'}
+                ],
+                BillingMode='PAY_PER_REQUEST'
+            )
+            print("Help messages table created")
+        except dynamodb.meta.client.exceptions.ResourceInUseException:
+            print("Help messages table already exists")
         
-        print("DynamoDB tables created successfully!")
+        print("DynamoDB tables initialization completed")
         
     except Exception as e:
-        print(f"Tables might already exist: {e}")
+        print(f"DynamoDB table creation failed: {e}")
 
 def hash_password(password):
+    """Hash password using SHA256"""
     return hashlib.sha256(password.encode()).hexdigest()
 
-def send_email(to_email, subject, body):
+def send_email_notification(to_email, subject, body):
+    """Send email notification"""
     try:
         msg = MIMEMultipart()
         msg['From'] = EMAIL_USER
@@ -171,34 +182,232 @@ def send_email(to_email, subject, body):
         server.login(EMAIL_USER, EMAIL_PASS)
         server.send_message(msg)
         server.quit()
+        
+        print(f"Email sent to {to_email}")
         return True
     except Exception as e:
         print(f"Email sending failed: {e}")
         return False
 
 def send_sns_notification(message):
+    """Send SNS notification"""
     try:
-        sns.publish(
-            TopicArn=SNS_TOPIC_ARN,
-            Message=message,
-            Subject='Stocker Notification'
-        )
-        return True
+        if sns:
+            response = sns.publish(
+                TopicArn=SNS_TOPIC_ARN,
+                Message=message,
+                Subject='Stocker Alert'
+            )
+            print(f"SNS notification sent: {response['MessageId']}")
+            return True
+        else:
+            print(f"SNS Notification (simulated): {message}")
+            return True
     except Exception as e:
         print(f"SNS notification failed: {e}")
         return False
 
-def update_stock_prices():
-    while True:
-        for symbol in STOCKS:
-            change = random.uniform(-0.05, 0.05)
-            STOCKS[symbol]['price'] *= (1 + change)
-            STOCKS[symbol]['price'] = round(STOCKS[symbol]['price'], 2)
-        time.sleep(10)
+# DynamoDB helper functions
+def get_user_by_email(email):
+    """Get user by email"""
+    if not dynamodb:
+        return None
+    
+    try:
+        table = dynamodb.Table(f'{DYNAMODB_TABLE_PREFIX}users')
+        response = table.scan(
+            FilterExpression='email = :email',
+            ExpressionAttributeValues={':email': email}
+        )
+        items = response.get('Items', [])
+        return items[0] if items else None
+    except Exception as e:
+        print(f"DynamoDB get_user_by_email error: {e}")
+        return None
 
-# Start background thread for price updates
-threading.Thread(target=update_stock_prices, daemon=True).start()
+def get_user_by_username(username):
+    """Get user by username"""
+    if not dynamodb:
+        return None
+    
+    try:
+        table = dynamodb.Table(f'{DYNAMODB_TABLE_PREFIX}users')
+        response = table.get_item(Key={'username': username})
+        return response.get('Item')
+    except Exception as e:
+        print(f"DynamoDB get_user_by_username error: {e}")
+        return None
 
+def create_user(username, email, password_hash, role):
+    """Create new user"""
+    if not dynamodb:
+        return False
+    
+    try:
+        table = dynamodb.Table(f'{DYNAMODB_TABLE_PREFIX}users')
+        table.put_item(Item={
+            'username': username,
+            'email': email,
+            'password_hash': password_hash,
+            'role': role,
+            'created_at': datetime.now().isoformat()
+        })
+        return True
+    except Exception as e:
+        print(f"DynamoDB create_user error: {e}")
+        return False
+
+def get_user_portfolio(user_id):
+    """Get user portfolio"""
+    if not dynamodb:
+        return []
+    
+    try:
+        table = dynamodb.Table(f'{DYNAMODB_TABLE_PREFIX}portfolio')
+        response = table.query(
+            KeyConditionExpression='user_id = :user_id',
+            ExpressionAttributeValues={':user_id': user_id}
+        )
+        return response.get('Items', [])
+    except Exception as e:
+        print(f"DynamoDB get_user_portfolio error: {e}")
+        return []
+
+def update_portfolio(user_id, stock_symbol, quantity, average_price):
+    """Update user portfolio"""
+    if not dynamodb:
+        return False
+    
+    try:
+        table = dynamodb.Table(f'{DYNAMODB_TABLE_PREFIX}portfolio')
+        if quantity > 0:
+            table.put_item(Item={
+                'user_id': user_id,
+                'stock_symbol': stock_symbol,
+                'quantity': quantity,
+                'average_price': Decimal(str(average_price)),
+                'created_at': datetime.now().isoformat()
+            })
+        else:
+            table.delete_item(Key={'user_id': user_id, 'stock_symbol': stock_symbol})
+        return True
+    except Exception as e:
+        print(f"DynamoDB update_portfolio error: {e}")
+        return False
+
+def add_trade_history(user_id, stock_symbol, trade_type, quantity, price, total_amount):
+    """Add trade to history"""
+    if not dynamodb:
+        return False
+    
+    try:
+        table = dynamodb.Table(f'{DYNAMODB_TABLE_PREFIX}trade_history')
+        timestamp = datetime.now().isoformat()
+        table.put_item(Item={
+            'user_id': user_id,
+            'timestamp': timestamp,
+            'stock_symbol': stock_symbol,
+            'trade_type': trade_type,
+            'quantity': quantity,
+            'price': Decimal(str(price)),
+            'total_amount': Decimal(str(total_amount)),
+            'created_at': timestamp
+        })
+        return True
+    except Exception as e:
+        print(f"DynamoDB add_trade_history error: {e}")
+        return False
+
+def get_user_trade_history(user_id):
+    """Get user trade history"""
+    if not dynamodb:
+        return []
+    
+    try:
+        table = dynamodb.Table(f'{DYNAMODB_TABLE_PREFIX}trade_history')
+        response = table.query(
+            KeyConditionExpression='user_id = :user_id',
+            ExpressionAttributeValues={':user_id': user_id},
+            ScanIndexForward=False
+        )
+        return response.get('Items', [])
+    except Exception as e:
+        print(f"DynamoDB get_user_trade_history error: {e}")
+        return []
+
+def add_help_message(user_id, username, message):
+    """Add help message"""
+    if not dynamodb:
+        return False
+    
+    try:
+        table = dynamodb.Table(f'{DYNAMODB_TABLE_PREFIX}help_messages')
+        message_id = f"{user_id}_{int(time.time())}"
+        table.put_item(Item={
+            'message_id': message_id,
+            'user_id': user_id,
+            'username': username,
+            'message': message,
+            'created_at': datetime.now().isoformat()
+        })
+        return True
+    except Exception as e:
+        print(f"DynamoDB add_help_message error: {e}")
+        return False
+
+def get_all_users():
+    """Get all users"""
+    if not dynamodb:
+        return []
+    
+    try:
+        table = dynamodb.Table(f'{DYNAMODB_TABLE_PREFIX}users')
+        response = table.scan()
+        return response.get('Items', [])
+    except Exception as e:
+        print(f"DynamoDB get_all_users error: {e}")
+        return []
+
+def get_all_portfolios():
+    """Get all portfolios"""
+    if not dynamodb:
+        return []
+    
+    try:
+        table = dynamodb.Table(f'{DYNAMODB_TABLE_PREFIX}portfolio')
+        response = table.scan()
+        return response.get('Items', [])
+    except Exception as e:
+        print(f"DynamoDB get_all_portfolios error: {e}")
+        return []
+
+def get_all_trades():
+    """Get all trades"""
+    if not dynamodb:
+        return []
+    
+    try:
+        table = dynamodb.Table(f'{DYNAMODB_TABLE_PREFIX}trade_history')
+        response = table.scan()
+        return response.get('Items', [])
+    except Exception as e:
+        print(f"DynamoDB get_all_trades error: {e}")
+        return []
+
+def get_all_help_messages():
+    """Get all help messages"""
+    if not dynamodb:
+        return []
+    
+    try:
+        table = dynamodb.Table(f'{DYNAMODB_TABLE_PREFIX}help_messages')
+        response = table.scan()
+        return response.get('Items', [])
+    except Exception as e:
+        print(f"DynamoDB get_all_help_messages error: {e}")
+        return []
+
+# Routes
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -206,32 +415,27 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
+        email = request.form['email']
         password = request.form['password']
         role = request.form['role']
         
-        users_table = dynamodb.Table('stocker_users')
-        response = users_table.query(
-            IndexName='username-index',
-            KeyConditionExpression='username = :username',
-            ExpressionAttributeValues={':username': username}
-        )
+        password_hash = hash_password(password)
+        user = get_user_by_email(email)
         
-        if response['Items']:
-            user = response['Items'][0]
-            if user['password'] == hash_password(password) and user['role'] == role:
-                session['user_id'] = user['user_id']
-                session['username'] = user['username']
-                session['role'] = user['role']
-                
-                # Send notifications
-                send_email(user['email'], 'Stocker Login', f'Hello {username}, you have successfully logged in to Stocker.')
-                send_sns_notification(f'User {username} logged in as {role}')
-                
-                if role == 'Admin':
-                    return redirect(url_for('admin_dashboard'))
-                else:
-                    return redirect(url_for('dashboard'))
+        if user and user['password_hash'] == password_hash and user['role'] == role:
+            session['user_id'] = user['username']
+            session['username'] = user['username']
+            session['email'] = user['email']
+            session['role'] = user['role']
+            
+            # Send notifications
+            send_email_notification(user['email'], "Login Alert", f"User {user['username']} logged in as {role}")
+            send_sns_notification(f"User {user['username']} logged in as {role}")
+            
+            if role == 'Admin':
+                return redirect(url_for('admin_dashboard'))
+            else:
+                return redirect(url_for('dashboard'))
         
         flash('Invalid credentials')
     
@@ -245,202 +449,52 @@ def signup():
         password = request.form['password']
         role = request.form['role']
         
-        user_id = str(uuid.uuid4())
+        # Check if username already exists
+        if get_user_by_username(username):
+            flash('Username already exists')
+            return render_template('signup.html')
         
-        users_table = dynamodb.Table('stocker_users')
-        
-        try:
-            users_table.put_item(
-                Item={
-                    'user_id': user_id,
-                    'username': username,
-                    'email': email,
-                    'password': hash_password(password),
-                    'role': role,
-                    'created_at': datetime.datetime.now().isoformat()
-                },
-                ConditionExpression='attribute_not_exists(username)'
-            )
-            
+        password_hash = hash_password(password)
+        if create_user(username, email, password_hash, role):
             # Send notifications
-            send_email(email, 'Welcome to Stocker', f'Hello {username}, welcome to Stocker! Your account has been created.')
-            send_sns_notification(f'New user {username} signed up as {role}')
+            send_email_notification(email, "Welcome to Stocker", f"Welcome {username}! Your account has been created.")
+            send_sns_notification(f"New user signup: {username} as {role}")
             
             flash('Account created successfully! Please login.')
             return redirect(url_for('login'))
-            
-        except Exception as e:
-            flash('Username already exists')
+        else:
+            flash('Signup failed')
     
     return render_template('signup.html')
 
-@app.route('/check_username')
-def check_username():
-    username = request.args.get('username')
-    
-    users_table = dynamodb.Table('stocker_users')
-    response = users_table.query(
-        IndexName='username-index',
-        KeyConditionExpression='username = :username',
-        ExpressionAttributeValues={':username': username}
-    )
-    
-    exists = len(response['Items']) > 0
+@app.route('/check_username/<username>')
+def check_username(username):
+    exists = get_user_by_username(username) is not None
     return jsonify({'exists': exists})
 
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session or session['role'] != 'Trader':
         return redirect(url_for('login'))
-    return render_template('dashboard.html', stocks=STOCKS)
+    return render_template('dashboard.html', username=session['username'])
 
 @app.route('/trade')
 def trade():
     if 'user_id' not in session or session['role'] != 'Trader':
         return redirect(url_for('login'))
-    return render_template('trade.html', stocks=STOCKS)
-
-@app.route('/execute_trade', methods=['POST'])
-def execute_trade():
-    if 'user_id' not in session or session['role'] != 'Trader':
-        return redirect(url_for('login'))
-    
-    symbol = request.form['symbol']
-    action = request.form['action']
-    quantity = int(request.form['quantity'])
-    price = float(request.form['price'])
-    total = quantity * price
-    
-    # Record trade
-    trades_table = dynamodb.Table('stocker_trades')
-    trades_table.put_item(
-        Item={
-            'trade_id': str(uuid.uuid4()),
-            'user_id': session['user_id'],
-            'symbol': symbol,
-            'action': action,
-            'quantity': quantity,
-            'price': Decimal(str(price)),
-            'total': Decimal(str(total)),
-            'created_at': datetime.datetime.now().isoformat()
-        }
-    )
-    
-    # Update portfolio
-    portfolio_table = dynamodb.Table('stocker_portfolio')
-    
-    if action == 'Buy':
-        try:
-            response = portfolio_table.get_item(
-                Key={'user_id': session['user_id'], 'symbol': symbol}
-            )
-            
-            if 'Item' in response:
-                existing = response['Item']
-                new_quantity = existing['quantity'] + quantity
-                new_avg_price = ((existing['quantity'] * existing['avg_price']) + total) / new_quantity
-                
-                portfolio_table.update_item(
-                    Key={'user_id': session['user_id'], 'symbol': symbol},
-                    UpdateExpression='SET quantity = :q, avg_price = :p',
-                    ExpressionAttributeValues={
-                        ':q': new_quantity,
-                        ':p': Decimal(str(new_avg_price))
-                    }
-                )
-            else:
-                portfolio_table.put_item(
-                    Item={
-                        'user_id': session['user_id'],
-                        'symbol': symbol,
-                        'quantity': quantity,
-                        'avg_price': Decimal(str(price)),
-                        'created_at': datetime.datetime.now().isoformat()
-                    }
-                )
-        except Exception as e:
-            print(f"Error updating portfolio: {e}")
-    
-    elif action == 'Sell':
-        try:
-            response = portfolio_table.get_item(
-                Key={'user_id': session['user_id'], 'symbol': symbol}
-            )
-            
-            if 'Item' in response:
-                existing = response['Item']
-                if existing['quantity'] >= quantity:
-                    new_quantity = existing['quantity'] - quantity
-                    if new_quantity > 0:
-                        portfolio_table.update_item(
-                            Key={'user_id': session['user_id'], 'symbol': symbol},
-                            UpdateExpression='SET quantity = :q',
-                            ExpressionAttributeValues={':q': new_quantity}
-                        )
-                    else:
-                        portfolio_table.delete_item(
-                            Key={'user_id': session['user_id'], 'symbol': symbol}
-                        )
-        except Exception as e:
-            print(f"Error updating portfolio: {e}")
-    
-    flash(f'Trade executed: {action} {quantity} shares of {symbol}')
-    return redirect(url_for('portfolio'))
+    return render_template('trade.html', username=session['username'])
 
 @app.route('/portfolio')
 def portfolio():
     if 'user_id' not in session or session['role'] != 'Trader':
         return redirect(url_for('login'))
-    
-    portfolio_table = dynamodb.Table('stocker_portfolio')
-    response = portfolio_table.query(
-        KeyConditionExpression='user_id = :user_id',
-        ExpressionAttributeValues={':user_id': session['user_id']}
-    )
-    
-    portfolio_data = []
-    for item in response['Items']:
-        current_price = STOCKS[item['symbol']]['price']
-        total_value = float(item['quantity']) * current_price
-        portfolio_data.append({
-            'symbol': item['symbol'],
-            'name': STOCKS[item['symbol']]['name'],
-            'quantity': item['quantity'],
-            'avg_price': float(item['avg_price']),
-            'current_price': current_price,
-            'total_value': total_value,
-            'created_at': item['created_at']
-        })
-    
-    return render_template('portfolio.html', portfolio=portfolio_data, stocks=STOCKS)
+    return render_template('portfolio.html', username=session['username'])
 
 @app.route('/history')
 def history():
     if 'user_id' not in session or session['role'] != 'Trader':
         return redirect(url_for('login'))
-    
-    trades_table = dynamodb.Table('stocker_trades')
-    response = trades_table.query(
-        IndexName='user-id-index',
-        KeyConditionExpression='user_id = :user_id',
-        ExpressionAttributeValues={':user_id': session['user_id']},
-        ScanIndexForward=False
-    )
-    
-    trades = []
-    for item in response['Items']:
-        trades.append([
-            item['trade_id'],
-            item['user_id'],
-            item['symbol'],
-            item['action'],
-            item['quantity'],
-            float(item['price']),
-            float(item['total']),
-            item['created_at']
-        ])
-    
-    return render_template('history.html', trades=trades)
+    return render_template('history.html', username=session['username'])
 
 @app.route('/help', methods=['GET', 'POST'])
 def help():
@@ -450,167 +504,311 @@ def help():
     if request.method == 'POST':
         message = request.form['message']
         
-        messages_table = dynamodb.Table('stocker_messages')
-        messages_table.put_item(
-            Item={
-                'message_id': str(uuid.uuid4()),
-                'user_id': session['user_id'],
-                'message': message,
-                'created_at': datetime.datetime.now().isoformat()
-            }
-        )
-        flash('Message sent successfully!')
+        if add_help_message(session['user_id'], session['username'], message):
+            flash('Message sent successfully!')
+        else:
+            flash('Failed to send message')
     
-    return render_template('help.html')
+    return render_template('help.html', username=session['username'])
 
+# Admin routes
 @app.route('/admin_dashboard')
 def admin_dashboard():
     if 'user_id' not in session or session['role'] != 'Admin':
         return redirect(url_for('login'))
-    
-    # Get stats from DynamoDB
-    users_table = dynamodb.Table('stocker_users')
-    trades_table = dynamodb.Table('stocker_trades')
-    portfolio_table = dynamodb.Table('stocker_portfolio')
-    
-    # Count traders
-    users_response = users_table.scan(
-        FilterExpression='#role = :role',
-        ExpressionAttributeNames={'#role': 'role'},
-        ExpressionAttributeValues={':role': 'Trader'}
-    )
-    total_traders = users_response['Count']
-    
-    # Count trades
-    trades_response = trades_table.scan()
-    total_trades = trades_response['Count']
-    
-    # Calculate portfolio value
-    portfolio_response = portfolio_table.scan()
-    total_portfolio_value = 0
-    for item in portfolio_response['Items']:
-        total_portfolio_value += float(item['quantity']) * float(item['avg_price'])
-    
-    return render_template('admin_dashboard.html', 
-                         total_traders=total_traders,
-                         total_trades=total_trades,
-                         total_portfolio_value=total_portfolio_value)
+    return render_template('admin_dashboard.html', username=session['username'])
 
 @app.route('/admin_portfolio')
 def admin_portfolio():
     if 'user_id' not in session or session['role'] != 'Admin':
         return redirect(url_for('login'))
-    
-    portfolio_table = dynamodb.Table('stocker_portfolio')
-    users_table = dynamodb.Table('stocker_users')
-    
-    portfolio_response = portfolio_table.scan()
-    portfolios = []
-    
-    for item in portfolio_response['Items']:
-        user_response = users_table.get_item(Key={'user_id': item['user_id']})
-        username = user_response['Item']['username'] if 'Item' in user_response else 'Unknown'
-        
-        portfolios.append([
-            username,
-            item['symbol'],
-            item['quantity'],
-            float(item['avg_price']),
-            item['created_at']
-        ])
-    
-    return render_template('admin_portfolio.html', portfolios=portfolios, stocks=STOCKS)
+    return render_template('admin_portfolio.html', username=session['username'])
 
 @app.route('/admin_history')
 def admin_history():
     if 'user_id' not in session or session['role'] != 'Admin':
         return redirect(url_for('login'))
-    
-    trades_table = dynamodb.Table('stocker_trades')
-    users_table = dynamodb.Table('stocker_users')
-    
-    trades_response = trades_table.scan()
-    trades = []
-    
-    for item in trades_response['Items']:
-        user_response = users_table.get_item(Key={'user_id': item['user_id']})
-        username = user_response['Item']['username'] if 'Item' in user_response else 'Unknown'
-        
-        trades.append([
-            username,
-            item['symbol'],
-            item['action'],
-            item['quantity'],
-            float(item['price']),
-            float(item['total']),
-            item['created_at']
-        ])
-    
-    # Sort by created_at descending
-    trades.sort(key=lambda x: x[6], reverse=True)
-    
-    return render_template('admin_history.html', trades=trades)
+    return render_template('admin_history.html', username=session['username'])
 
 @app.route('/admin_manage')
 def admin_manage():
     if 'user_id' not in session or session['role'] != 'Admin':
         return redirect(url_for('login'))
-    
-    users_table = dynamodb.Table('stocker_users')
-    messages_table = dynamodb.Table('stocker_messages')
-    
-    # Get users
-    users_response = users_table.scan(
-        FilterExpression='#role = :role',
-        ExpressionAttributeNames={'#role': 'role'},
-        ExpressionAttributeValues={':role': 'Trader'}
-    )
-    
-    users = []
-    for item in users_response['Items']:
-        users.append([
-            item['user_id'],
-            item['username'],
-            item['email'],
-            item['password'],
-            item['role'],
-            item['created_at']
-        ])
-    
-    # Get messages
-    messages_response = messages_table.scan()
-    messages = []
-    
-    for item in messages_response['Items']:
-        user_response = users_table.get_item(Key={'user_id': item['user_id']})
-        username = user_response['Item']['username'] if 'Item' in user_response else 'Unknown'
-        
-        messages.append([
-            item['message'],
-            item['created_at'],
-            username
-        ])
-    
-    # Sort messages by created_at descending
-    messages.sort(key=lambda x: x[1], reverse=True)
-    
-    return render_template('admin_manage.html', users=users, messages=messages)
+    return render_template('admin_manage.html', username=session['username'])
 
-@app.route('/get_stock_prices')
-def get_stock_prices():
-    return jsonify(STOCKS)
+# API endpoints
+@app.route('/api/stock_prices')
+def api_stock_prices():
+    return jsonify(get_current_stock_prices())
+
+@app.route('/api/execute_trade', methods=['POST'])
+def api_execute_trade():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    data = request.json
+    stock_symbol = data['stock_symbol']
+    trade_type = data['trade_type']
+    quantity = int(data['quantity'])
+    price = float(data['price'])
+    total_amount = quantity * price
+    
+    # Record trade in history
+    add_trade_history(session['user_id'], stock_symbol, trade_type, quantity, price, total_amount)
+    
+    # Update portfolio
+    portfolio = get_user_portfolio(session['user_id'])
+    portfolio_item = None
+    for item in portfolio:
+        if item['stock_symbol'] == stock_symbol:
+            portfolio_item = item
+            break
+    
+    if trade_type == 'buy':
+        if portfolio_item:
+            current_quantity = int(portfolio_item['quantity'])
+            current_avg_price = float(portfolio_item['average_price'])
+            new_quantity = current_quantity + quantity
+            new_avg_price = ((current_quantity * current_avg_price) + (quantity * price)) / new_quantity
+            
+            update_portfolio(session['user_id'], stock_symbol, new_quantity, new_avg_price)
+        else:
+            update_portfolio(session['user_id'], stock_symbol, quantity, price)
+    
+    elif trade_type == 'sell':
+        if portfolio_item:
+            current_quantity = int(portfolio_item['quantity'])
+            if current_quantity >= quantity:
+                new_quantity = current_quantity - quantity
+                avg_price = float(portfolio_item['average_price'])
+                update_portfolio(session['user_id'], stock_symbol, new_quantity, avg_price)
+    
+    return jsonify({'success': True})
+
+@app.route('/api/portfolio')
+def api_portfolio():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    portfolio = get_user_portfolio(session['user_id'])
+    current_prices = get_current_stock_prices()
+    
+    result = []
+    for item in portfolio:
+        symbol = item['stock_symbol']
+        quantity = int(item['quantity'])
+        avg_price = float(item['average_price'])
+        current_price = current_prices.get(symbol, {}).get('price', 0)
+        
+        result.append({
+            'symbol': symbol,
+            'name': STOCK_DATA[symbol]['name'],
+            'quantity': quantity,
+            'average_price': avg_price,
+            'current_price': current_price,
+            'total_value': quantity * current_price,
+            'created_at': item['created_at']
+        })
+    
+    return jsonify(result)
+
+@app.route('/api/trade_history')
+def api_trade_history():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    history = get_user_trade_history(session['user_id'])
+    
+    result = []
+    for item in history:
+        symbol = item['stock_symbol']
+        result.append({
+            'symbol': symbol,
+            'name': STOCK_DATA[symbol]['name'],
+            'trade_type': item['trade_type'],
+            'quantity': int(item['quantity']),
+            'price': float(item['price']),
+            'total_amount': float(item['total_amount']),
+            'created_at': item['created_at']
+        })
+    
+    return jsonify(result)
+
+# Admin API endpoints
+@app.route('/api/admin/stats')
+def api_admin_stats():
+    if 'user_id' not in session or session['role'] != 'Admin':
+        return jsonify({'error': 'Not authorized'}), 403
+    
+    try:
+        users = get_all_users()
+        trades = get_all_trades()
+        portfolios = get_all_portfolios()
+        
+        total_traders = len([u for u in users if u.get('role') == 'Trader'])
+        total_trades = len(trades)
+        
+        # Calculate total portfolio value
+        total_portfolio_value = 0
+        current_prices = get_current_stock_prices()
+        for portfolio_item in portfolios:
+            symbol = portfolio_item['stock_symbol']
+            quantity = int(portfolio_item['quantity'])
+            current_price = current_prices.get(symbol, {}).get('price', 0)
+            total_portfolio_value += quantity * current_price
+        
+        return jsonify({
+            'total_traders': total_traders,
+            'total_trades': total_trades,
+            'total_portfolio_value': round(total_portfolio_value, 2)
+        })
+    except Exception as e:
+        print(f"Admin stats error: {e}")
+        return jsonify({
+            'total_traders': 0,
+            'total_trades': 0,
+            'total_portfolio_value': 0.00
+        })
+
+@app.route('/api/admin/all_portfolios')
+def api_admin_all_portfolios():
+    if 'user_id' not in session or session['role'] != 'Admin':
+        return jsonify({'error': 'Not authorized'}), 403
+    
+    try:
+        portfolios = get_all_portfolios()
+        users = get_all_users()
+        current_prices = get_current_stock_prices()
+        
+        # Create username lookup
+        username_lookup = {user['username']: user['username'] for user in users}
+        
+        result = []
+        for item in portfolios:
+            symbol = item['stock_symbol']
+            quantity = int(item['quantity'])
+            avg_price = float(item['average_price'])
+            current_price = current_prices.get(symbol, {}).get('price', 0)
+            username = username_lookup.get(item['user_id'], item['user_id'])
+            
+            result.append({
+                'username': username,
+                'symbol': symbol,
+                'name': STOCK_DATA.get(symbol, {}).get('name', symbol),
+                'quantity': quantity,
+                'average_price': avg_price,
+                'current_price': current_price,
+                'total_value': quantity * current_price,
+                'created_at': item['created_at']
+            })
+        
+        return jsonify(result)
+    except Exception as e:
+        print(f"Admin portfolios error: {e}")
+        return jsonify([])
+
+@app.route('/api/admin/all_trades')
+def api_admin_all_trades():
+    if 'user_id' not in session or session['role'] != 'Admin':
+        return jsonify({'error': 'Not authorized'}), 403
+    
+    try:
+        trades = get_all_trades()
+        users = get_all_users()
+        
+        # Create username lookup
+        username_lookup = {user['username']: user['username'] for user in users}
+        
+        result = []
+        for item in trades:
+            symbol = item['stock_symbol']
+            username = username_lookup.get(item['user_id'], item['user_id'])
+            
+            result.append({
+                'username': username,
+                'symbol': symbol,
+                'name': STOCK_DATA.get(symbol, {}).get('name', symbol),
+                'trade_type': item['trade_type'],
+                'quantity': int(item['quantity']),
+                'price': float(item['price']),
+                'total_amount': float(item['total_amount']),
+                'created_at': item['created_at']
+            })
+        
+        # Sort by created_at descending
+        result.sort(key=lambda x: x['created_at'], reverse=True)
+        return jsonify(result)
+    except Exception as e:
+        print(f"Admin trades error: {e}")
+        return jsonify([])
+
+@app.route('/api/admin/users')
+def api_admin_users():
+    if 'user_id' not in session or session['role'] != 'Admin':
+        return jsonify({'error': 'Not authorized'}), 403
+    
+    try:
+        users = get_all_users()
+        
+        result = []
+        for user in users:
+            result.append({
+                'username': user['username'],
+                'email': user['email'],
+                'role': user['role'],
+                'created_at': user['created_at']
+            })
+        
+        # Sort by created_at descending
+        result.sort(key=lambda x: x['created_at'], reverse=True)
+        return jsonify(result)
+    except Exception as e:
+        print(f"Admin users error: {e}")
+        return jsonify([])
+
+@app.route('/api/admin/messages')
+def api_admin_messages():
+    if 'user_id' not in session or session['role'] != 'Admin':
+        return jsonify({'error': 'Not authorized'}), 403
+    
+    try:
+        messages = get_all_help_messages()
+        
+        result = []
+        for message in messages:
+            result.append({
+                'username': message['username'],
+                'message': message['message'],
+                'created_at': message['created_at']
+            })
+        
+        # Sort by created_at descending
+        result.sort(key=lambda x: x['created_at'], reverse=True)
+        return jsonify(result)
+    except Exception as e:
+        print(f"Admin messages error: {e}")
+        return jsonify([])
 
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('index'))
 
-if __name__ == '__main__':
-    init_dynamodb()
-    
-    # Auto-open browser
-    def open_browser():
+def open_browser():
+    global browser_opened
+    if not browser_opened:
         webbrowser.open('http://127.0.0.1:5000')
+        browser_opened = True
+
+if _name_ == '_main_':
+    init_dynamodb()
+    print("Stocker AWS Version Starting...")
+    print("Database: AWS DynamoDB")
+    print("Notifications: AWS SNS")
     
-    threading.Timer(1, open_browser).start()
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        print("Opening browser...")
+        timer = threading.Timer(1.0, open_browser)
+        timer.start()
+    
     app.run(debug=True, host='0.0.0.0', port=5000)
