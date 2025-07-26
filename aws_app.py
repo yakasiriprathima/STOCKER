@@ -800,7 +800,7 @@ def open_browser():
         webbrowser.open('http://127.0.0.1:5000')
         browser_opened = True
 
-if _name_ == '_main_':
+if __name__ == '__main__':
     init_dynamodb()
     print("Stocker AWS Version Starting...")
     print("Database: AWS DynamoDB")
