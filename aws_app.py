@@ -23,7 +23,7 @@ browser_opened = False
 
 # AWS Configuration - Use environment variables with fallbacks
 AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
-SNS_TOPIC_ARN = "arn:aws:sns:us-east-1:794038220422:arntopic"
+SNS_TOPIC_ARN ='arn:aws:sns:us-east-1:794038220422:arntopic'
 DYNAMODB_TABLE_PREFIX = os.environ.get('DYNAMODB_TABLE_PREFIX', 'stocker_')
 
 # Email Configuration
