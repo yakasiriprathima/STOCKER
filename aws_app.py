@@ -15,7 +15,7 @@ import threading
 from decimal import Decimal
 import uuid
 
-app = Flask(_name_)
+app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
 
 # Global variable to track if browser was already opened
